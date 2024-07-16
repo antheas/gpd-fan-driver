@@ -542,20 +542,20 @@ static int gpd_fan_probe(struct platform_device *pdev) {
 
     const struct resource *plat_res = platform_get_resource(pdev, IORESOURCE_IO, 0);
     if (IS_ERR_OR_NULL(plat_res)) {
-        pr_err("Failed to get platform resource\n");
+        pr_warn("Failed to get platform resource\n");
         return -ENODEV;
     }
 
     const struct resource *region_res = devm_request_region(dev, plat_res->start, resource_size(plat_res), DRIVER_NAME);
     if (IS_ERR_OR_NULL(region_res)) {
-        pr_err("Failed to request region\n");
+        pr_warn("Failed to request region\n");
         return -EBUSY;
     }
 
     const struct device *dev_reg = devm_hwmon_device_register_with_info(dev, DRIVER_NAME, data, &gpd_fan_chip_info,
                                                                         NULL);
     if (IS_ERR_OR_NULL(dev_reg)) {
-        pr_err("Failed to register hwmon device\n");
+        pr_warn("Failed to register hwmon device\n");
         return -EBUSY;
     }
 
@@ -568,7 +568,7 @@ static int gpd_fan_probe(struct platform_device *pdev) {
                                  &debugfs_pwm_fops, sizeof(u8));
     }
 
-    pr_info("GPD Devices fan driver probed\n");
+    pr_debug("GPD Devices fan driver probed\n");
     return 0;
 }
 
@@ -583,7 +583,7 @@ static int gpd_fan_remove(__attribute__((unused)) struct platform_device *pdev) 
         DEBUG_FS_ENTRY = NULL;
     }
 
-    pr_info("GPD Devices fan driver removed\n");
+    pr_debug("GPD Devices fan driver removed\n");
     return 0;
 }
 
@@ -611,14 +611,14 @@ static int __init gpd_fan_init(void) {
         match = dmi_first_match(gpd_devices)->driver_data;
         if (!IS_ERR_OR_NULL(match) && !match->tested) {
             pr_warn(
-                "GPD Fan Driver do have the quirk for your device, but it's not tested. Please tested carefully by model parameter gpd_fan_model=%s and report.",
+                "GPD Fan Driver do have the quirk for your device, but it's not tested. Please tested carefully by model parameter gpd_fan_model=%s and report.\n",
                 match->model_name);
             match = NULL;
         }
     }
 
     if (IS_ERR_OR_NULL(match)) {
-        pr_err("GPD Devices not supported\n");
+        pr_debug("GPD Devices not supported\n");
         return -ENODEV;
     } else {
         pr_info("Loading GPD fan model quirk: %s\n", match->model_name);
@@ -647,18 +647,18 @@ static int __init gpd_fan_init(void) {
                                                      sizeof(struct driver_private_data));
 
     if (IS_ERR(gpd_fan_platform_device)) {
-        pr_err("Failed to create platform device\n");
+        pr_warn("Failed to create platform device\n");
         return PTR_ERR(gpd_fan_platform_device);
     }
 
-    pr_info("GPD Devices fan driver loaded\n");
+    pr_debug("GPD Devices fan driver loaded\n");
     return 0;
 }
 
 static void __exit gpd_fan_exit(void) {
     platform_device_unregister(gpd_fan_platform_device);
     platform_driver_unregister(&gpd_fan_driver);
-    pr_info("GPD Devices fan driver unloaded\n");
+    pr_debug("GPD Devices fan driver unloaded\n");
 }
 
 module_init(gpd_fan_init)
