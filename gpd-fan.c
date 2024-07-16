@@ -50,6 +50,8 @@ struct model_ec_address {
 struct model_quirk {
     const char *model_name;
 
+    bool tested;
+
     const struct model_ec_address address;
 
     int (*const read_rpm)(struct driver_private_data *, u16 *);
@@ -186,6 +188,7 @@ static int gpd_win_mini_write_pwm(const struct driver_private_data *const data, 
 
 static const struct model_quirk gpd_win_mini_quirk = {
     .model_name = "win_mini",
+    .tested = false,
     .address = {
         .addr_port = 0x4E,
         .data_port = 0x4F,
@@ -235,6 +238,7 @@ static int gpd_win4_read_rpm(struct driver_private_data *const data, u16 *const 
 
 static const struct model_quirk gpd_win4_quirk = {
     .model_name = "win4",
+    .tested = false,
     .address = {
         .addr_port = 0x2E,
         .data_port = 0x2F,
@@ -324,6 +328,7 @@ static int gpd_wm2_write_pwm(const struct driver_private_data *const data, const
 
 static const struct model_quirk gpd_wm2_quirk = {
     .model_name = "wm2",
+    .tested = true,
     .address = {
         .addr_port = 0x4E,
         .data_port = 0x4F,
@@ -604,6 +609,12 @@ static int __init gpd_fan_init(void) {
 
     if (match == NULL) {
         match = dmi_first_match(gpd_devices)->driver_data;
+        if (!IS_ERR_OR_NULL(match) && !match->tested) {
+            pr_warn(
+                "GPD Fan Driver do have the quirk for your device, but it's not tested. Please tested carefully by model parameter gpd_fan_model=%s and report.",
+                match->model_name);
+            match = NULL;
+        }
     }
 
     if (IS_ERR_OR_NULL(match)) {
