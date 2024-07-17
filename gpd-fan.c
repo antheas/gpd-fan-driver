@@ -53,11 +53,11 @@ struct gpd_model_quirk {
 	const char *model_name;
 	const struct gpd_model_ec_address address;
 
-	s32 (*read_rpm)(struct gpd_driver_priv *);
-	int (*set_pwm_enable)(struct gpd_driver_priv *,
+	s32 (*read_rpm)(struct gpd_driver_priv *data);
+	int (*set_pwm_enable)(struct gpd_driver_priv *data,
 			      enum FAN_PWM_ENABLE);
-	s16 (*read_pwm)(struct gpd_driver_priv *);
-	int (*write_pwm)(const struct gpd_driver_priv *, u8);
+	s16 (*read_pwm)(struct gpd_driver_priv *data);
+	int (*write_pwm)(const struct gpd_driver_priv *data, u8 val);
 };
 
 // general struct declare end
@@ -70,8 +70,7 @@ static int gpd_write_pwm(const struct gpd_driver_priv *data, u8 val);
 
 static int gpd_win_mini_set_pwm_enable(struct gpd_driver_priv *data,
 				       enum FAN_PWM_ENABLE pwm_enable);
-static int gpd_win_mini_write_pwm(const struct gpd_driver_priv *data,
-				  u8 val);
+static int gpd_win_mini_write_pwm(const struct gpd_driver_priv *data, u8 val);
 
 static s32 gpd_win4_read_rpm(struct gpd_driver_priv *data);
 
@@ -178,14 +177,14 @@ static const struct dmi_system_id gpd_devices[] = {
 	{}
 };
 
-static const struct gpd_model_quirk *gpd_module_quirks[] = { &gpd_win_mini_quirk,
-							 &gpd_win4_quirk,
-							 &gpd_wm2_quirk, NULL };
+static const struct gpd_model_quirk *gpd_module_quirks[] = {
+	&gpd_win_mini_quirk, &gpd_win4_quirk, &gpd_wm2_quirk, NULL
+};
 
 // device EC truly access start
 
-static int gpd_ecram_read(const struct gpd_model_ec_address *address, u16 offset,
-			  u8 *val)
+static int gpd_ecram_read(const struct gpd_model_ec_address *address,
+			  u16 offset, u8 *val)
 {
 	int ret;
 
@@ -216,8 +215,8 @@ static int gpd_ecram_read(const struct gpd_model_ec_address *address, u16 offset
 	return 0;
 }
 
-static int gpd_ecram_write(const struct gpd_model_ec_address *address, u16 offset,
-			   u8 value)
+static int gpd_ecram_write(const struct gpd_model_ec_address *address,
+			   u16 offset, u8 value)
 {
 	int ret = mutex_lock_interruptible(&gpd_fan_lock);
 
@@ -248,17 +247,19 @@ static int gpd_ecram_write(const struct gpd_model_ec_address *address, u16 offse
 
 // device EC truly access end
 
-// device quirk fuction implement start
+// device quirk function implement start
 
-static s32 gpd_read_cached_fan_speed(
-	struct gpd_driver_priv *data,
-	s32 (*read_uncached)(const struct gpd_driver_priv *))
+static s32
+gpd_read_cached_fan_speed(struct gpd_driver_priv *data,
+			  s32 (*read_uncached)(const struct gpd_driver_priv *))
 {
 	// Update per 1000 milliseconds
 	if (time_after(jiffies, data->fan_speed_last_update + HZ)) {
 		s32 ret = read_uncached(data);
+
 		if (ret < 0)
 			return ret;
+
 		data->fan_speed_cached = ret;
 		data->fan_speed_last_update = jiffies;
 	}
@@ -272,8 +273,10 @@ gpd_read_cached_pwm(struct gpd_driver_priv *data,
 	// Update per 1000 milliseconds
 	if (time_after(jiffies, data->read_pwm_last_update + HZ)) {
 		s16 ret = read_uncached(data);
+
 		if (ret < 0)
 			return ret;
+
 		data->read_pwm_cached = ret;
 		data->read_pwm_last_update = jiffies;
 	}
@@ -329,8 +332,7 @@ static int gpd_win_mini_set_pwm_enable(struct gpd_driver_priv *data,
 	return 0;
 }
 
-static int gpd_win_mini_write_pwm(const struct gpd_driver_priv *data,
-				  u8 val)
+static int gpd_win_mini_write_pwm(const struct gpd_driver_priv *data, u8 val)
 {
 	if (data->pwm_enable == MANUAL)
 		return gpd_write_pwm(data, val);
@@ -452,7 +454,7 @@ static int gpd_wm2_write_pwm(const struct gpd_driver_priv *data, u8 val)
 	return 0;
 }
 
-// device quirk fuction implement start
+// device quirk function implement start
 
 // hwmon subsystem start
 
@@ -569,21 +571,21 @@ static int gpd_fan_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	plat_res = platform_get_resource(pdev, IORESOURCE_IO, 0);
-	if (IS_ERR_OR_NULL(plat_res)) {
-		return dev_err_probe(dev, PTR_ERR(plat_res), "Failed to get platform resource\n");
-	}
+	if (IS_ERR_OR_NULL(plat_res))
+		return dev_err_probe(dev, PTR_ERR(plat_res),
+				     "Failed to get platform resource\n");
 
 	region_res = devm_request_region(dev, plat_res->start,
 					 resource_size(plat_res), DRIVER_NAME);
-	if (IS_ERR_OR_NULL(region_res)) {
-		return dev_err_probe(dev, PTR_ERR(region_res), "Failed to request region\n");
-	}
+	if (IS_ERR_OR_NULL(region_res))
+		return dev_err_probe(dev, PTR_ERR(region_res),
+				     "Failed to request region\n");
 
 	dev_reg = devm_hwmon_device_register_with_info(
 		dev, DRIVER_NAME, data, &gpd_fan_chip_info, NULL);
-	if (IS_ERR_OR_NULL(dev_reg)) {
-		return dev_err_probe(dev, PTR_ERR(region_res), "Failed to register hwmon device\n");
-	}
+	if (IS_ERR_OR_NULL(dev_reg))
+		return dev_err_probe(dev, PTR_ERR(region_res),
+				     "Failed to register hwmon device\n");
 
 	return 0;
 }
@@ -612,21 +614,18 @@ static int __init gpd_fan_init(void)
 {
 	const struct gpd_model_quirk *match = NULL;
 
-	for (const struct gpd_model_quirk **p = gpd_module_quirks; *p != NULL;
-	     p++) {
+	for (const struct gpd_model_quirk **p = gpd_module_quirks; *p; p++) {
 		if (strcmp(gpd_fan_model, (*p)->model_name) == 0) {
 			match = *p;
 			break;
 		}
 	}
 
-	if (!match) {
+	if (!match)
 		match = dmi_first_match(gpd_devices)->driver_data;
-	}
 
-	if (!match) {
+	if (!match)
 		return -ENODEV;
-	}
 
 	struct gpd_driver_priv data = {
 		.pwm_enable = AUTOMATIC,
