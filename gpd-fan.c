@@ -454,7 +454,7 @@ static int gpd_wm2_write_pwm(const struct gpd_driver_priv *data, u8 val)
 	return 0;
 }
 
-// device quirk function implement start
+// device quirk function implement end
 
 // hwmon subsystem start
 
