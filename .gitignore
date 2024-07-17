@@ -1,6 +1,6 @@
-.idea
 *.ko
 .*
+!.clang-format
 *.o
 *mod*
 Module.symvers
