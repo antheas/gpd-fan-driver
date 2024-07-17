@@ -16,14 +16,14 @@ module_param(gpd_fan_model, charp, 0444);
 
 static DEFINE_MUTEX(gpd_fan_locker);
 
-enum FUN_PWM_ENABLE {
+enum FAN_PWM_ENABLE {
 	DISABLE = 0,
 	MANUAL = 1,
 	AUTOMATIC = 2,
 };
 
 struct driver_private_data {
-	enum FUN_PWM_ENABLE pwm_enable;
+	enum FAN_PWM_ENABLE pwm_enable;
 	u8 pwm_value;
 
 	u16 fan_speed_cached;
@@ -46,25 +46,23 @@ struct model_ec_address {
 
 struct model_quirk {
 	const char *model_name;
-
 	bool tested;
-
 	const struct model_ec_address address;
 
-	s32 (*const read_rpm)(struct driver_private_data *);
-
-	int (*const set_pwm_enable)(struct driver_private_data *,
-				    enum FUN_PWM_ENABLE);
-
-	s16 (*const read_pwm)(struct driver_private_data *);
-
-	int (*const write_pwm)(const struct driver_private_data *, u8);
+	s32 (*read_rpm)(struct driver_private_data *);
+	int (*set_pwm_enable)(struct driver_private_data *,
+				    enum FAN_PWM_ENABLE);
+	s16 (*read_pwm)(struct driver_private_data *);
+	int (*write_pwm)(const struct driver_private_data *, u8);
 };
 
-static int gpd_ecram_read(const struct model_ec_address *const address,
-			  const u16 offset, u8 *const val)
+static int gpd_ecram_read(const struct model_ec_address * address,
+			  u16 offset, u8 * val)
 {
-	int ret = mutex_lock_interruptible(&gpd_fan_locker);
+	int ret;
+
+	// Should never access EC at the same time, otherwise system down.
+	ret = mutex_lock_interruptible(&gpd_fan_locker);
 
 	if (ret)
 		return ret;
@@ -91,8 +89,8 @@ static int gpd_ecram_read(const struct model_ec_address *const address,
 	return 0;
 }
 
-static int gpd_ecram_write(const struct model_ec_address *const address,
-			   const u16 offset, const u8 value)
+static int gpd_ecram_write(const struct model_ec_address * address,
+			   u16 offset, u8 value)
 {
 	int ret = mutex_lock_interruptible(&gpd_fan_locker);
 
@@ -151,11 +149,11 @@ gpd_read_cached_pwm(struct driver_private_data *data,
 	return data->read_pwm_cached;
 }
 
-static s32 gpd_read_rpm_uncached(const struct driver_private_data *const data)
+static s32 gpd_read_rpm_uncached(const struct driver_private_data * data)
 {
 	u8 high, low;
 	int ret;
-	const struct model_ec_address *const address = &data->quirk->address;
+	const struct model_ec_address * address = &data->quirk->address;
 
 	ret = gpd_ecram_read(address, address->rpm_read, &high);
 	if (ret)
@@ -167,28 +165,28 @@ static s32 gpd_read_rpm_uncached(const struct driver_private_data *const data)
 	return high << 8 | low;
 }
 
-static s32 gpd_read_rpm(struct driver_private_data *const data)
+static s32 gpd_read_rpm(struct driver_private_data * data)
 {
 	return gpd_read_cached_fan_speed(data, gpd_read_rpm_uncached);
 }
 
-static s16 gpd_read_pwm(struct driver_private_data *const data)
+static s16 gpd_read_pwm(struct driver_private_data * data)
 {
 	return data->pwm_value;
 }
 
-static int gpd_write_pwm(const struct driver_private_data *const data,
-			 const u8 val)
+static int gpd_write_pwm(const struct driver_private_data * data,
+			 u8 val)
 {
-	const struct model_ec_address *const address = &data->quirk->address;
+	const struct model_ec_address * address = &data->quirk->address;
 
 	u8 actual = val * (address->pwm_max - 1) / 255 + 1;
 
 	return gpd_ecram_write(address, address->pwm_write, actual);
 }
 
-static int gpd_win_mini_set_pwm_enable(struct driver_private_data *const data,
-				       const enum FUN_PWM_ENABLE pwm_enable)
+static int gpd_win_mini_set_pwm_enable(struct driver_private_data * data,
+				       enum FAN_PWM_ENABLE pwm_enable)
 {
 	switch (pwm_enable) {
 	case DISABLE:
@@ -201,8 +199,8 @@ static int gpd_win_mini_set_pwm_enable(struct driver_private_data *const data,
 	return 0;
 }
 
-static int gpd_win_mini_write_pwm(const struct driver_private_data *const data,
-				  const u8 val)
+static int gpd_win_mini_write_pwm(const struct driver_private_data * data,
+				  u8 val)
 {
 	if (data->pwm_enable == MANUAL)
 		return gpd_write_pwm(data, val);
@@ -227,9 +225,9 @@ static const struct model_quirk gpd_win_mini_quirk = {
 };
 
 static s32
-gpd_win4_read_rpm_uncached(const struct driver_private_data *const data)
+gpd_win4_read_rpm_uncached(const struct driver_private_data * data)
 {
-	const struct model_ec_address *const address = &data->quirk->address;
+	const struct model_ec_address * address = &data->quirk->address;
 	u8 PWMCTR;
 
 	gpd_ecram_read(address, 0x1841, &PWMCTR);
@@ -258,7 +256,7 @@ gpd_win4_read_rpm_uncached(const struct driver_private_data *const data)
 	return ret;
 }
 
-static s32 gpd_win4_read_rpm(struct driver_private_data *const data)
+static s32 gpd_win4_read_rpm(struct driver_private_data * data)
 {
 	return gpd_read_cached_fan_speed(data, gpd_win4_read_rpm_uncached);
 }
@@ -283,9 +281,9 @@ static const struct model_quirk gpd_win4_quirk = {
 };
 
 static s32
-gpd_wm2_read_rpm_uncached(const struct driver_private_data *const data)
+gpd_wm2_read_rpm_uncached(const struct driver_private_data * data)
 {
-	const struct model_ec_address *const address = &data->quirk->address;
+	const struct model_ec_address * address = &data->quirk->address;
 
 	for (u16 pwm_ctr_offset = 0x1841; pwm_ctr_offset <= 0x1843;
 	     pwm_ctr_offset++) {
@@ -298,15 +296,15 @@ gpd_wm2_read_rpm_uncached(const struct driver_private_data *const data)
 	return gpd_read_rpm_uncached(data);
 }
 
-static s32 gpd_wm2_read_rpm(struct driver_private_data *const data)
+static s32 gpd_wm2_read_rpm(struct driver_private_data * data)
 {
 	return gpd_read_cached_fan_speed(data, gpd_wm2_read_rpm_uncached);
 }
 
 static s16
-gpd_wm2_read_pwm_uncached(const struct driver_private_data *const data)
+gpd_wm2_read_pwm_uncached(const struct driver_private_data * data)
 {
-	const struct model_ec_address *const address = &data->quirk->address;
+	const struct model_ec_address * address = &data->quirk->address;
 	u8 var;
 	int ret = gpd_ecram_read(address, address->pwm_write, &var);
 
@@ -316,15 +314,15 @@ gpd_wm2_read_pwm_uncached(const struct driver_private_data *const data)
 	return var * 255 / address->pwm_max;
 }
 
-static s16 gpd_wm2_read_pwm(struct driver_private_data *const data)
+static s16 gpd_wm2_read_pwm(struct driver_private_data * data)
 {
 	return gpd_read_cached_pwm(data, gpd_wm2_read_pwm_uncached);
 }
 
-static int gpd_wm2_set_pwm_enable(struct driver_private_data *const data,
-				  const enum FUN_PWM_ENABLE enable)
+static int gpd_wm2_set_pwm_enable(struct driver_private_data * data,
+				  enum FAN_PWM_ENABLE enable)
 {
-	const struct model_ec_address *const address = &data->quirk->address;
+	const struct model_ec_address * address = &data->quirk->address;
 
 	switch (enable) {
 	case DISABLE:
@@ -355,8 +353,8 @@ static int gpd_wm2_set_pwm_enable(struct driver_private_data *const data,
 	return 0;
 }
 
-static int gpd_wm2_write_pwm(const struct driver_private_data *const data,
-			     const u8 val)
+static int gpd_wm2_write_pwm(const struct driver_private_data *data,
+			     u8 val)
 {
 	if (data->pwm_enable != DISABLE)
 		return gpd_write_pwm(data, val);
@@ -528,26 +526,29 @@ static int gpd_fan_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct driver_private_data *data;
+	const struct resource *plat_res;
+	const struct device *dev_reg;
+	const struct resource *region_res;
 
 	data = dev_get_platdata(&pdev->dev);
 	if (IS_ERR_OR_NULL(data))
 		return -ENODEV;
 
-	const struct resource *plat_res =
+	plat_res =
 		platform_get_resource(pdev, IORESOURCE_IO, 0);
 	if (IS_ERR_OR_NULL(plat_res)) {
 		pr_warn("Failed to get platform resource\n");
 		return -ENODEV;
 	}
 
-	const struct resource *region_res = devm_request_region(
+	region_res = devm_request_region(
 		dev, plat_res->start, resource_size(plat_res), DRIVER_NAME);
 	if (IS_ERR_OR_NULL(region_res)) {
 		pr_warn("Failed to request region\n");
 		return -EBUSY;
 	}
 
-	const struct device *dev_reg = devm_hwmon_device_register_with_info(
+	dev_reg = devm_hwmon_device_register_with_info(
 		dev, DRIVER_NAME, data, &gpd_fan_chip_info, NULL);
 	if (IS_ERR_OR_NULL(dev_reg)) {
 		pr_warn("Failed to register hwmon device\n");
@@ -602,8 +603,6 @@ static int __init gpd_fan_init(void)
 		return -ENODEV;
 	}
 
-	pr_info("Loading GPD fan model quirk: %s\n", match->model_name);
-
 	struct driver_private_data data = {
 		.pwm_enable = AUTOMATIC,
 		.pwm_value = 255,
@@ -641,10 +640,9 @@ static void __exit gpd_fan_exit(void)
 }
 
 module_init(gpd_fan_init)
+module_exit(gpd_fan_exit)
 
-	module_exit(gpd_fan_exit)
-
-		MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Cryolitia <Cryolitia@gmail.com>");
 MODULE_DESCRIPTION("GPD Devices fan control driver");
 MODULE_ALIAS("dmi:*:svnGPD:pnG1617-01:*");
